@@ -6,6 +6,7 @@ from sklearn.utils.testing import assert_true
 from sklearn.utils.testing import assert_equal
 from sklearn.utils.testing import assert_greater
 from sklearn.utils.testing import assert_raises
+from sklearn.utils.testing import assert_no_warnings
 
 from sklearn import datasets
 from sklearn.decomposition import PCA
@@ -17,7 +18,7 @@ iris = datasets.load_iris()
 
 
 def test_pca():
-    """PCA on dense arrays"""
+    # PCA on dense arrays
     pca = PCA(n_components=2)
     X = iris.data
     X_r = pca.fit(X).transform(X)
@@ -46,8 +47,17 @@ def test_pca():
                                   np.eye(X.shape[1]), 12)
 
 
+def test_no_empty_slice_warning():
+    # test if we avoid numpy warnings for computing over empty arrays
+    n_components = 10
+    n_features = n_components + 2  # anything > n_comps triggerred it in 0.16
+    X = np.random.uniform(-1, 1, size=(n_components, n_features))
+    pca = PCA(n_components=n_components)
+    assert_no_warnings(pca.fit, X)
+
+
 def test_whitening():
-    """Check that PCA output has unit-variance"""
+    # Check that PCA output has unit-variance
     rng = np.random.RandomState(0)
     n_samples = 100
     n_features = 80
@@ -72,13 +82,16 @@ def test_whitening():
         # whiten the data while projecting to the lower dim subspace
         X_ = X.copy()  # make sure we keep an original across iterations.
         pca = this_PCA(n_components=n_components, whiten=True, copy=copy)
+        if hasattr(pca, 'random_state'):
+            pca.random_state = rng
         # test fit_transform
         X_whitened = pca.fit_transform(X_.copy())
         assert_equal(X_whitened.shape, (n_samples, n_components))
         X_whitened2 = pca.transform(X_)
         assert_array_almost_equal(X_whitened, X_whitened2)
 
-        assert_almost_equal(X_whitened.std(axis=0), np.ones(n_components))
+        assert_almost_equal(X_whitened.std(axis=0), np.ones(n_components),
+                            decimal=4)
         assert_almost_equal(X_whitened.mean(axis=0), np.zeros(n_components))
 
         X_ = X.copy()
@@ -93,7 +106,7 @@ def test_whitening():
 
 
 def test_explained_variance():
-    """Check that PCA output has unit-variance"""
+    # Check that PCA output has unit-variance
     rng = np.random.RandomState(0)
     n_samples = 100
     n_features = 80
@@ -101,11 +114,9 @@ def test_explained_variance():
     X = rng.randn(n_samples, n_features)
 
     pca = PCA(n_components=2).fit(X)
-    rpca = RandomizedPCA(n_components=2, random_state=42).fit(X)
-    assert_array_almost_equal(pca.explained_variance_,
-                              rpca.explained_variance_, 1)
+    rpca = RandomizedPCA(n_components=2, random_state=rng).fit(X)
     assert_array_almost_equal(pca.explained_variance_ratio_,
-                              rpca.explained_variance_ratio_, 3)
+                              rpca.explained_variance_ratio_, 1)
 
     # compare to empirical variances
     X_pca = pca.transform(X)
@@ -113,12 +124,22 @@ def test_explained_variance():
                               np.var(X_pca, axis=0))
 
     X_rpca = rpca.transform(X)
-    assert_array_almost_equal(rpca.explained_variance_,
-                              np.var(X_rpca, axis=0))
+    assert_array_almost_equal(rpca.explained_variance_, np.var(X_rpca, axis=0),
+                              decimal=1)
+
+    # Same with correlated data
+    X = datasets.make_classification(n_samples, n_features,
+                                     n_informative=n_features-2,
+                                     random_state=rng)[0]
+
+    pca = PCA(n_components=2).fit(X)
+    rpca = RandomizedPCA(n_components=2, random_state=rng).fit(X)
+    assert_array_almost_equal(pca.explained_variance_ratio_,
+                              rpca.explained_variance_ratio_, 5)
 
 
 def test_pca_check_projection():
-    """Test that the projection of data is correct"""
+    # Test that the projection of data is correct
     rng = np.random.RandomState(0)
     n, p = 100, 3
     X = rng.randn(n, p) * .1
@@ -132,7 +153,7 @@ def test_pca_check_projection():
 
 
 def test_pca_inverse():
-    """Test that the projection of data can be inverted"""
+    # Test that the projection of data can be inverted
     rng = np.random.RandomState(0)
     n, p = 50, 3
     X = rng.randn(n, p)  # spherical data
@@ -161,7 +182,7 @@ def test_pca_validation():
 
 
 def test_randomized_pca_check_projection():
-    """Test that the projection by RandomizedPCA on dense data is correct"""
+    # Test that the projection by RandomizedPCA on dense data is correct
     rng = np.random.RandomState(0)
     n, p = 100, 3
     X = rng.randn(n, p) * .1
@@ -175,7 +196,7 @@ def test_randomized_pca_check_projection():
 
 
 def test_randomized_pca_check_list():
-    """Test that the projection by RandomizedPCA on list data is correct"""
+    # Test that the projection by RandomizedPCA on list data is correct
     X = [[1.0, 0.0], [0.0, 1.0]]
     X_transformed = RandomizedPCA(n_components=1,
                                   random_state=0).fit(X).transform(X)
@@ -185,7 +206,7 @@ def test_randomized_pca_check_list():
 
 
 def test_randomized_pca_inverse():
-    """Test that RandomizedPCA is inversible on dense data"""
+    # Test that RandomizedPCA is inversible on dense data
     rng = np.random.RandomState(0)
     n, p = 50, 3
     X = rng.randn(n, p)  # spherical data
@@ -209,7 +230,7 @@ def test_randomized_pca_inverse():
 
 
 def test_pca_dim():
-    """Check automated dimensionality setting"""
+    # Check automated dimensionality setting
     rng = np.random.RandomState(0)
     n, p = 100, 5
     X = rng.randn(n, p) * .1
@@ -220,10 +241,8 @@ def test_pca_dim():
 
 
 def test_infer_dim_1():
-    """TODO: explain what this is testing
-
-    Or at least use explicit variable names...
-    """
+    # TODO: explain what this is testing
+    # Or at least use explicit variable names...
     n, p = 1000, 5
     rng = np.random.RandomState(0)
     X = (rng.randn(n, p) * .1 + rng.randn(n, 1) * np.array([3, 4, 5, 1, 2])
@@ -239,10 +258,8 @@ def test_infer_dim_1():
 
 
 def test_infer_dim_2():
-    """TODO: explain what this is testing
-
-    Or at least use explicit variable names...
-    """
+    # TODO: explain what this is testing
+    # Or at least use explicit variable names...
     n, p = 1000, 5
     rng = np.random.RandomState(0)
     X = rng.randn(n, p) * .1
@@ -255,8 +272,6 @@ def test_infer_dim_2():
 
 
 def test_infer_dim_3():
-    """
-    """
     n, p = 100, 5
     rng = np.random.RandomState(0)
     X = rng.randn(n, p) * .1
@@ -290,7 +305,7 @@ def test_infer_dim_by_explained_variance():
 
 
 def test_pca_score():
-    """Test that probabilistic PCA scoring yields a reasonable score"""
+    # Test that probabilistic PCA scoring yields a reasonable score
     n, p = 1000, 3
     rng = np.random.RandomState(0)
     X = rng.randn(n, p) * .1 + np.array([3, 4, 5])
@@ -302,7 +317,7 @@ def test_pca_score():
 
 
 def test_pca_score2():
-    """Test that probabilistic PCA correctly separated different datasets"""
+    # Test that probabilistic PCA correctly separated different datasets
     n, p = 100, 3
     rng = np.random.RandomState(0)
     X = rng.randn(n, p) * .1 + np.array([3, 4, 5])
@@ -320,7 +335,7 @@ def test_pca_score2():
 
 
 def test_pca_score3():
-    """Check that probabilistic PCA selects the right model"""
+    # Check that probabilistic PCA selects the right model
     n, p = 200, 3
     rng = np.random.RandomState(0)
     Xl = (rng.randn(n, p) + rng.randn(n, 1) * np.array([3, 4, 5])
@@ -334,8 +349,3 @@ def test_pca_score3():
         ll[k] = pca.score(Xt)
 
     assert_true(ll.argmax() == 1)
-
-
-if __name__ == '__main__':
-    import nose
-    nose.run(argv=['', __file__])

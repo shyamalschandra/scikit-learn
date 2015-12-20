@@ -20,6 +20,7 @@ import gzip
 import posixpath
 import subprocess
 import warnings
+from sklearn.externals import six
 
 
 # Try Python 2 first, otherwise load from Python 3
@@ -42,7 +43,7 @@ try:
     execfile
 except NameError:
     def execfile(filename, global_vars=None, local_vars=None):
-        with open(filename) as f:
+        with open(filename, encoding='utf-8') as f:
             code = compile(f.read(), filename, 'exec')
             exec(code, global_vars, local_vars)
 
@@ -426,7 +427,10 @@ carousel_thumbs = {'plot_classifier_comparison_001.png': (1, 600),
 def extract_docstring(filename, ignore_heading=False):
     """ Extract a module-level docstring, if any
     """
-    lines = open(filename).readlines()
+    if six.PY2:
+        lines = open(filename).readlines()
+    else:
+        lines = open(filename, encoding='utf-8').readlines()
     start_row = 0
     if lines[0].startswith('#!'):
         lines.pop(0)
@@ -522,7 +526,10 @@ Examples
 def extract_line_count(filename, target_dir):
     # Extract the line count of a file
     example_file = os.path.join(target_dir, filename)
-    lines = open(example_file).readlines()
+    if six.PY2:
+        lines = open(example_file).readlines()
+    else:
+        lines = open(example_file, encoding='utf-8').readlines()
     start_row = 0
     if lines and lines[0].startswith('#!'):
         lines.pop(0)
@@ -557,7 +564,7 @@ def line_count_sort(file_list, target_dir):
     return np.array(unsorted[index][:, 0]).tolist()
 
 
-def _thumbnail_div(subdir, full_dir, fname, snippet):
+def _thumbnail_div(subdir, full_dir, fname, snippet, is_backref=False):
     """Generates RST to place a thumbnail in a gallery"""
     thumb = os.path.join(full_dir, 'images', 'thumb', fname[:-3] + '.png')
     link_name = os.path.join(full_dir, fname).replace(os.path.sep, '_')
@@ -569,19 +576,19 @@ def _thumbnail_div(subdir, full_dir, fname, snippet):
 
 .. raw:: html
 
-
     <div class="thumbnailContainer" tooltip="{}">
 
 """.format(snippet))
 
-    out.append('.. figure:: %s\n' % thumb)
+    out.append('.. only:: html\n\n')
+    out.append('  .. figure:: %s\n' % thumb)
     if link_name.startswith('._'):
         link_name = link_name[2:]
     if full_dir != '.':
-        out.append('   :target: ./%s/%s.html\n\n' % (full_dir, fname[:-3]))
+        out.append('    :target: ./%s/%s.html\n\n' % (full_dir, fname[:-3]))
     else:
-        out.append('   :target: ./%s.html\n\n' % link_name[:-3])
-    out.append("""   :ref:`example_%s`
+        out.append('    :target: ./%s.html\n\n' % link_name[:-3])
+    out.append("""    :ref:`example_%s`
 
 
 .. raw:: html
@@ -589,6 +596,8 @@ def _thumbnail_div(subdir, full_dir, fname, snippet):
     </div>
 
 """ % (ref_name))
+    if is_backref:
+        out.append('.. only:: not html\n\n  * :ref:`example_%s`' % ref_name)
     return ''.join(out)
 
 
@@ -644,7 +653,7 @@ def generate_dir_rst(directory, fhindex, example_dir, root_dir, plot_gallery, se
                               file=ex_file)
                         print(file=ex_file)
                     rel_dir = os.path.join('../../auto_examples', directory)
-                    ex_file.write(_thumbnail_div(directory, rel_dir, fname, snippet))
+                    ex_file.write(_thumbnail_div(directory, rel_dir, fname, snippet, is_backref=True))
                     seen_backrefs.add(backref)
     fhindex.write("""
 .. raw:: html
@@ -955,7 +964,11 @@ def generate_file_rst(fname, target_dir, src_dir, root_dir, plot_gallery):
     f.flush()
 
     # save variables so we can later add links to the documentation
-    example_code_obj = identify_names(open(example_file).read())
+    if six.PY2:
+        example_code_obj = identify_names(open(example_file).read())
+    else:
+        example_code_obj = \
+            identify_names(open(example_file, encoding='utf-8').read())
     if example_code_obj:
         codeobj_fname = example_file[:-3] + '_codeobj.pickle'
         with open(codeobj_fname, 'wb') as fid:

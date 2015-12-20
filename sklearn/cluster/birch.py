@@ -14,6 +14,8 @@ from ..base import TransformerMixin, ClusterMixin, BaseEstimator
 from ..externals.six.moves import xrange
 from ..utils import check_array
 from ..utils.extmath import row_norms, safe_sparse_dot
+from ..utils.validation import check_is_fitted
+from ..exceptions import NotFittedError
 from .hierarchical import AgglomerativeClustering
 
 
@@ -49,12 +51,10 @@ def _split_node(node, threshold, branching_factor):
     new_subcluster2 = _CFSubcluster()
     new_node1 = _CFNode(
         threshold, branching_factor, is_leaf=node.is_leaf,
-        n_features=node.n_features
-        )
+        n_features=node.n_features)
     new_node2 = _CFNode(
         threshold, branching_factor, is_leaf=node.is_leaf,
-        n_features=node.n_features
-        )
+        n_features=node.n_features)
     new_subcluster1.child_ = new_node1
     new_subcluster2.child_ = new_node2
 
@@ -99,11 +99,14 @@ class _CFNode(object):
         Threshold needed for a new subcluster to enter a CFSubcluster.
 
     branching_factor : int
-       Maximum number of CF subclusters in each node.
+        Maximum number of CF subclusters in each node.
 
     is_leaf : bool
         We need to know if the CFNode is a leaf or not, in order to
         retrieve the final subclusters.
+
+    n_features : int
+        The number of features.
 
     Attributes
     ----------
@@ -118,17 +121,17 @@ class _CFNode(object):
         the final subclusters.
 
     init_centroids_ : ndarray, shape (branching_factor + 1, n_features)
-        manipulate init_centroids_ throughout rather than centroids_ since
-        the centroids are just a view of the init_centroids_ .
+        manipulate ``init_centroids_`` throughout rather than centroids_ since
+        the centroids are just a view of the ``init_centroids_`` .
 
     init_sq_norm_ : ndarray, shape (branching_factor + 1,)
-        manipulate init_sq_norm_ throughout. similar to init_centroids_.
+        manipulate init_sq_norm_ throughout. similar to ``init_centroids_``.
 
     centroids_ : ndarray
-        view of init_centroids_.
+        view of ``init_centroids_``.
 
     squared_norm_ : ndarray
-        view of init_sq_norm_.
+        view of ``init_sq_norm_``.
 
     """
     def __init__(self, threshold, branching_factor, is_leaf, n_features):
@@ -163,7 +166,6 @@ class _CFNode(object):
         """Remove a subcluster from a node and update it with the
         split subclusters.
         """
-        n_samples = len(self.subclusters_)
         ind = self.subclusters_.index(subcluster)
         self.subclusters_[ind] = new_subcluster1
         self.init_centroids_[ind] = new_subcluster1.centroid_
@@ -249,10 +251,6 @@ class _CFSubcluster(object):
         Sample. This is kept optional to allow initialization of empty
         subclusters.
 
-    index : int, optional
-        Index of the array in the original data. This enables to
-        retrieve the final subclusters.
-
     Attributes
     ----------
     n_samples_ : int
@@ -267,11 +265,11 @@ class _CFSubcluster(object):
 
     centroid_ : ndarray
         Centroid of the subcluster. Prevent recomputing of centroids when
-        CFNode.centroids_ is called.
+        ``CFNode.centroids_`` is called.
 
     child_ : _CFNode
         Child Node of the subcluster. Once a given _CFNode is set as the child
-        of the _CFNode, it is set to self.child_.
+        of the _CFNode, it is set to ``self.child_``.
 
     sq_norm_ : ndarray
         Squared norm of the subcluster. Used to prevent recomputing when
@@ -320,8 +318,7 @@ class _CFSubcluster(object):
         dot_product = -2 * np.dot(self.linear_sum_, self.centroid_)
         return sqrt(
             ((self.squared_sum_ + dot_product) / self.n_samples_) +
-            self.sq_norm_
-            )
+            self.sq_norm_)
 
 
 class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
@@ -331,6 +328,8 @@ class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
     Tree. It is then clubbed together with the subcluster that has the
     centroid closest to the new sample. This is done recursively till it
     ends up at the subcluster of the leaf of the tree has the closest centroid.
+
+    Read more in the :ref:`User Guide <birch>`.
 
     Parameters
     ----------
@@ -518,8 +517,8 @@ class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
         has_partial_fit = hasattr(self, 'partial_fit_')
 
         # Should raise an error if one does not fit before predicting.
-        if not has_partial_fit and not is_fitted:
-            raise ValueError("Fit training data before predicting")
+        if not (is_fitted or has_partial_fit):
+            raise NotFittedError("Fit training data before predicting")
 
         if is_fitted and X.shape[1] != self.subcluster_centers_.shape[1]:
             raise ValueError(
@@ -528,7 +527,7 @@ class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
 
     def predict(self, X):
         """
-        Predict data using the centroids_ of subclusters.
+        Predict data using the ``centroids_`` of subclusters.
 
         Avoid computation of the row norms of X.
 
@@ -566,8 +565,7 @@ class Birch(BaseEstimator, TransformerMixin, ClusterMixin):
         X_trans : {array-like, sparse matrix}, shape (n_samples, n_clusters)
             Transformed data.
         """
-        if not hasattr(self, 'subcluster_centers_'):
-            raise ValueError("Fit training data before predicting")
+        check_is_fitted(self, 'subcluster_centers_')
         return euclidean_distances(X, self.subcluster_centers_)
 
     def _global_clustering(self, X=None):

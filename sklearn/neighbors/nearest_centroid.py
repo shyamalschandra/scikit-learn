@@ -13,18 +13,19 @@ import numpy as np
 from scipy import sparse as sp
 
 from ..base import BaseEstimator, ClassifierMixin
-from ..externals.six.moves import xrange
 from ..metrics.pairwise import pairwise_distances
 from ..preprocessing import LabelEncoder
-from ..utils.validation import check_array, check_X_y
+from ..utils.validation import check_array, check_X_y, check_is_fitted
 from ..utils.sparsefuncs import csc_median_axis_0
-
+from ..utils.multiclass import check_classification_targets
 
 class NearestCentroid(BaseEstimator, ClassifierMixin):
     """Nearest centroid classifier.
 
     Each class is represented by its centroid, with test samples classified to
     the class with the nearest centroid.
+
+    Read more in the :ref:`User Guide <nearest_centroid_classifier>`.
 
     Parameters
     ----------
@@ -104,7 +105,8 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
         if is_X_sparse and self.shrink_threshold:
             raise ValueError("threshold shrinking not supported"
                              " for sparse input")
-
+        check_classification_targets(y)
+        
         n_samples, n_features = X.shape
         le = LabelEncoder()
         y_ind = le.fit_transform(y)
@@ -118,7 +120,7 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
         # Number of clusters in each class.
         nk = np.zeros(n_classes)
 
-        for cur_class in y_ind:
+        for cur_class in range(n_classes):
             center_mask = y_ind == cur_class
             nk[cur_class] = np.sum(center_mask)
             if is_X_sparse:
@@ -182,8 +184,8 @@ class NearestCentroid(BaseEstimator, ClassifierMixin):
         be the distance matrix between the data to be predicted and
         ``self.centroids_``.
         """
+        check_is_fitted(self, 'centroids_')
+
         X = check_array(X, accept_sparse='csr')
-        if not hasattr(self, "centroids_"):
-            raise AttributeError("Model has not been trained yet.")
         return self.classes_[pairwise_distances(
             X, self.centroids_, metric=self.metric).argmin(axis=1)]

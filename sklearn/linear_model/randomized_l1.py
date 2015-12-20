@@ -20,9 +20,11 @@ from ..base import BaseEstimator, TransformerMixin
 from ..externals import six
 from ..externals.joblib import Memory, Parallel, delayed
 from ..utils import (as_float_array, check_random_state, check_X_y,
-                     check_array, safe_mask, ConvergenceWarning)
+                     check_array, safe_mask)
+from ..utils.validation import check_is_fitted
 from .least_angle import lars_path, LassoLarsIC
 from .logistic import LogisticRegression
+from ..exceptions import ConvergenceWarning
 
 
 ###############################################################################
@@ -87,7 +89,8 @@ class BaseRandomizedLinearModel(six.with_metaclass(ABCMeta, BaseEstimator,
         self : object
             Returns an instance of self.
         """
-        X, y = check_X_y(X, y, ['csr', 'csc', 'coo'])
+        X, y = check_X_y(X, y, ['csr', 'csc'], y_numeric=True,
+                         ensure_min_samples=2, estimator=self)
         X = as_float_array(X, copy=False)
         n_samples, n_features = X.shape
 
@@ -121,6 +124,8 @@ class BaseRandomizedLinearModel(six.with_metaclass(ABCMeta, BaseEstimator,
 
     def get_support(self, indices=False):
         """Return a mask, or list, of the features/indices selected."""
+        check_is_fitted(self, 'scores_')
+
         mask = self.scores_ > self.selection_threshold
         return mask if not indices else np.where(mask)[0]
 
@@ -157,7 +162,7 @@ def _randomized_lasso(X, y, weights, mask, alpha=1., verbose=False,
     X -= X.mean(axis=0)
     y -= y.mean()
 
-    alpha = np.atleast_1d(np.asarray(alpha, dtype=np.float))
+    alpha = np.atleast_1d(np.asarray(alpha, dtype=np.float64))
 
     X = (1 - weights) * X
     with warnings.catch_warnings():
@@ -186,6 +191,8 @@ class RandomizedLasso(BaseRandomizedLinearModel):
     Randomized Lasso works by resampling the train data and computing
     a Lasso on each resampling. In short, the features selected more
     often are good features. It is also known as stability selection.
+
+    Read more in the :ref:`User Guide <randomized_l1>`.
 
     Parameters
     ----------
@@ -323,7 +330,7 @@ class RandomizedLasso(BaseRandomizedLinearModel):
     def _make_estimator_and_params(self, X, y):
         assert self.precompute in (True, False, None, 'auto')
         alpha = self.alpha
-        if alpha in ('aic', 'bic'):
+        if isinstance(alpha, six.string_types) and alpha in ('aic', 'bic'):
             model = LassoLarsIC(precompute=self.precompute,
                                 criterion=self.alpha,
                                 max_iter=self.max_iter,
@@ -349,7 +356,7 @@ def _randomized_logistic(X, y, weights, mask, C=1., verbose=False,
     else:
         X *= (1 - weights)
 
-    C = np.atleast_1d(np.asarray(C, dtype=np.float))
+    C = np.atleast_1d(np.asarray(C, dtype=np.float64))
     scores = np.zeros((X.shape[1], len(C)), dtype=np.bool)
 
     for this_C, this_scores in zip(C, scores.T):
@@ -368,6 +375,8 @@ class RandomizedLogisticRegression(BaseRandomizedLinearModel):
     Randomized Regression works by resampling the train data and computing
     a LogisticRegression on each resampling. In short, the features selected
     more often are good features. It is also known as stability selection.
+
+    Read more in the :ref:`User Guide <randomized_l1>`.
 
     Parameters
     ----------
@@ -533,6 +542,8 @@ def lasso_stability_path(X, y, scaling=0.5, random_state=None,
                          eps=4 * np.finfo(np.float).eps, n_jobs=1,
                          verbose=False):
     """Stabiliy path based on randomized Lasso estimates
+
+    Read more in the :ref:`User Guide <randomized_l1>`.
 
     Parameters
     ----------

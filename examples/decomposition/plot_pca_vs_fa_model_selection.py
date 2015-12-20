@@ -1,10 +1,7 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
 """
-=================================================================
-Model selection with Probabilistic (PCA) and Factor Analysis (FA)
-=================================================================
+===============================================================
+Model selection with Probabilistic PCA and Factor Analysis (FA)
+===============================================================
 
 Probabilistic PCA and Factor Analysis are probabilistic models.
 The consequence is that the likelihood of new data can be used
@@ -38,8 +35,8 @@ from scipy import linalg
 
 from sklearn.decomposition import PCA, FactorAnalysis
 from sklearn.covariance import ShrunkCovariance, LedoitWolf
-from sklearn.cross_validation import cross_val_score
-from sklearn.grid_search import GridSearchCV
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
 
 ###############################################################################
 # Create the data

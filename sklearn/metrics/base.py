@@ -1,3 +1,4 @@
+
 """
 Common code for all metrics
 
@@ -19,9 +20,18 @@ import numpy as np
 from ..utils import check_array, check_consistent_length
 from ..utils.multiclass import type_of_target
 
+from ..exceptions import UndefinedMetricWarning as UndefinedMetricWarning_
+from ..utils import deprecated
 
-class UndefinedMetricWarning(UserWarning):
+
+class UndefinedMetricWarning(UndefinedMetricWarning_):
     pass
+
+
+UndefinedMetricWarning = deprecated("UndefinedMetricWarning has been moved "
+                                    "into the sklearn.exceptions module. "
+                                    "It will not be available here from "
+                                    "version 0.19")(UndefinedMetricWarning)
 
 
 def _average_binary_score(binary_metric, y_true, y_score, average,
@@ -55,6 +65,9 @@ def _average_binary_score(binary_metric, y_true, y_score, average,
 
     sample_weight : array-like of shape = [n_samples], optional
         Sample weights.
+
+    binary_metric : callable, returns shape [n_classes]
+        The binary metric function to use.
 
     Returns
     -------

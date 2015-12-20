@@ -15,12 +15,13 @@ from scipy.linalg.lapack import get_lapack_funcs
 from .base import LinearModel, _pre_fit
 from ..base import RegressorMixin
 from ..utils import as_float_array, check_array, check_X_y
-from ..cross_validation import _check_cv as check_cv
+from ..model_selection import check_cv
 from ..externals.joblib import Parallel, delayed
 
 import scipy
 solve_triangular_args = {}
 if LooseVersion(scipy.__version__) >= LooseVersion('0.12'):
+    # check_finite=False is an optimization available only in scipy >=0.12
     solve_triangular_args = {'check_finite': False}
 
 
@@ -89,7 +90,13 @@ def _cholesky_omp(X, y, n_nonzero_coefs, tol=None, copy_X=True,
     indices = np.arange(X.shape[1])  # keeping track of swapping
 
     max_features = X.shape[1] if tol is not None else n_nonzero_coefs
-    L = np.empty((max_features, max_features), dtype=X.dtype)
+    if solve_triangular_args:
+        # new scipy, don't need to initialize because check_finite=False
+        L = np.empty((max_features, max_features), dtype=X.dtype)
+    else:
+        # old scipy, we need the garbage upper triangle to be non-Inf
+        L = np.zeros((max_features, max_features), dtype=X.dtype)
+
     L[0, 0] = 1.
     if return_path:
         coefs = np.empty_like(L)
@@ -204,7 +211,12 @@ def _gram_omp(Gram, Xy, n_nonzero_coefs, tol_0=None, tol=None,
     n_active = 0
 
     max_features = len(Gram) if tol is not None else n_nonzero_coefs
-    L = np.empty((max_features, max_features), dtype=Gram.dtype)
+    if solve_triangular_args:
+        # new scipy, don't need to initialize because check_finite=False
+        L = np.empty((max_features, max_features), dtype=Gram.dtype)
+    else:
+        # old scipy, we need the garbage upper triangle to be non-Inf
+        L = np.zeros((max_features, max_features), dtype=Gram.dtype)
     L[0, 0] = 1.
     if return_path:
         coefs = np.empty_like(L)
@@ -268,6 +280,8 @@ def orthogonal_mp(X, y, n_nonzero_coefs=None, tol=None, precompute=False,
 
     When parametrized by error using the parameter `tol`:
     argmin ||\gamma||_0 subject to ||y - X\gamma||^2 <= tol
+
+    Read more in the :ref:`User Guide <omp>`.
 
     Parameters
     ----------
@@ -362,7 +376,8 @@ def orthogonal_mp(X, y, n_nonzero_coefs=None, tol=None, precompute=False,
         else:
             norms_squared = None
         return orthogonal_mp_gram(G, Xy, n_nonzero_coefs, tol, norms_squared,
-                                  copy_Gram=copy_X, copy_Xy=False, return_path=return_path)
+                                  copy_Gram=copy_X, copy_Xy=False,
+                                  return_path=return_path)
 
     if return_path:
         coef = np.zeros((X.shape[1], y.shape[1], X.shape[1]))
@@ -373,8 +388,7 @@ def orthogonal_mp(X, y, n_nonzero_coefs=None, tol=None, precompute=False,
     for k in range(y.shape[1]):
         out = _cholesky_omp(
             X, y[:, k], n_nonzero_coefs, tol,
-            copy_X=copy_X, return_path=return_path
-            )
+            copy_X=copy_X, return_path=return_path)
         if return_path:
             _, idx, coefs, n_iter = out
             coef = coef[:, :, :len(idx)]
@@ -402,6 +416,8 @@ def orthogonal_mp_gram(Gram, Xy, n_nonzero_coefs=None, tol=None,
 
     Solves n_targets Orthogonal Matching Pursuit problems using only
     the Gram matrix X.T * X and the product X.T * y.
+
+    Read more in the :ref:`User Guide <omp>`.
 
     Parameters
     ----------
@@ -504,8 +520,7 @@ def orthogonal_mp_gram(Gram, Xy, n_nonzero_coefs=None, tol=None,
             Gram, Xy[:, k], n_nonzero_coefs,
             norms_squared[k] if tol is not None else None, tol,
             copy_Gram=copy_Gram, copy_Xy=copy_Xy,
-            return_path=return_path
-            )
+            return_path=return_path)
         if return_path:
             _, idx, coefs, n_iter = out
             coef = coef[:, :, :len(idx)]
@@ -526,7 +541,7 @@ def orthogonal_mp_gram(Gram, Xy, n_nonzero_coefs=None, tol=None,
 
 
 class OrthogonalMatchingPursuit(LinearModel, RegressorMixin):
-    """Orthogonal Mathching Pursuit model (OMP)
+    """Orthogonal Matching Pursuit model (OMP)
 
     Parameters
     ----------
@@ -550,6 +565,8 @@ class OrthogonalMatchingPursuit(LinearModel, RegressorMixin):
         calculations. Improves performance when `n_targets` or `n_samples` is
         very large. Note that if you already have such matrices, you can pass
         them directly to the fit method.
+
+    Read more in the :ref:`User Guide <omp>`.
 
     Attributes
     ----------
@@ -609,8 +626,7 @@ class OrthogonalMatchingPursuit(LinearModel, RegressorMixin):
         self : object
             returns an instance of self.
         """
-        X = check_array(X)
-        y = np.asarray(y)
+        X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
         n_features = X.shape[1]
 
         X, y, X_mean, y_mean, X_std, Gram, Xy = \
@@ -718,7 +734,7 @@ def _omp_path_residues(X_train, y_train, X_test, y_test, copy=True,
 
 
 class OrthogonalMatchingPursuitCV(LinearModel, RegressorMixin):
-    """Cross-validated Orthogonal Mathching Pursuit model (OMP)
+    """Cross-validated Orthogonal Matching Pursuit model (OMP)
 
     Parameters
     ----------
@@ -739,9 +755,19 @@ class OrthogonalMatchingPursuitCV(LinearModel, RegressorMixin):
         Maximum numbers of iterations to perform, therefore maximum features
         to include. 10% of ``n_features`` but at least 5 if available.
 
-    cv : cross-validation generator, optional
-        see :mod:`sklearn.cross_validation`. If ``None`` is passed, default to
-        a 5-fold strategy
+    cv : int, cross-validation generator or an iterable, optional
+        Determines the cross-validation splitting strategy.
+        Possible inputs for cv are:
+
+        - None, to use the default 3-fold cross-validation,
+        - integer, to specify the number of folds.
+        - An object to be used as a cross-validation generator.
+        - An iterable yielding train/test splits.
+
+        For integer/None inputs, :class:`KFold` is used.
+
+        Refer :ref:`User Guide <cross_validation>` for the various
+        cross-validation strategies that can be used here.
 
     n_jobs : integer, optional
         Number of CPUs to use during the cross validation. If ``-1``, use
@@ -749,6 +775,8 @@ class OrthogonalMatchingPursuitCV(LinearModel, RegressorMixin):
 
     verbose : boolean or integer, optional
         Sets the verbosity amount
+
+    Read more in the :ref:`User Guide <omp>`.
 
     Attributes
     ----------
@@ -805,8 +833,10 @@ class OrthogonalMatchingPursuitCV(LinearModel, RegressorMixin):
         self : object
             returns an instance of self.
         """
-        X, y = check_X_y(X, y)
-        cv = check_cv(self.cv, X, y, classifier=False)
+        X, y = check_X_y(X, y, y_numeric=True, ensure_min_features=2,
+                         estimator=self)
+        X = as_float_array(X, copy=False, force_all_finite=False)
+        cv = check_cv(self.cv, classifier=False)
         max_iter = (min(max(int(0.1 * X.shape[1]), 5), X.shape[1])
                     if not self.max_iter
                     else self.max_iter)
@@ -814,7 +844,7 @@ class OrthogonalMatchingPursuitCV(LinearModel, RegressorMixin):
             delayed(_omp_path_residues)(
                 X[train], y[train], X[test], y[test], self.copy,
                 self.fit_intercept, self.normalize, max_iter)
-            for train, test in cv)
+            for train, test in cv.split(X))
 
         min_early_stop = min(fold.shape[0] for fold in cv_paths)
         mse_folds = np.array([(fold[:min_early_stop] ** 2).mean(axis=1)

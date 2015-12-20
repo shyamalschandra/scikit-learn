@@ -36,6 +36,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import HashingVectorizer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.linear_model import RidgeClassifier
+from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import SGDClassifier
 from sklearn.linear_model import Perceptron
@@ -208,7 +209,7 @@ def benchmark(clf):
     test_time = time() - t0
     print("test time:  %0.3fs" % test_time)
 
-    score = metrics.accuracy_score(y_test, pred, average='micro')
+    score = metrics.accuracy_score(y_test, pred)
     print("accuracy:   %0.3f" % score)
 
     if hasattr(clf, 'coef_'):
@@ -276,25 +277,14 @@ print("Naive Bayes")
 results.append(benchmark(MultinomialNB(alpha=.01)))
 results.append(benchmark(BernoulliNB(alpha=.01)))
 
-
-class L1LinearSVC(LinearSVC):
-
-    def fit(self, X, y):
-        # The smaller C, the stronger the regularization.
-        # The more regularization, the more sparsity.
-        self.transformer_ = LinearSVC(penalty="l1",
-                                      dual=False, tol=1e-3)
-        X = self.transformer_.fit_transform(X, y)
-        return LinearSVC.fit(self, X, y)
-
-    def predict(self, X):
-        X = self.transformer_.transform(X)
-        return LinearSVC.predict(self, X)
-
 print('=' * 80)
 print("LinearSVC with L1-based feature selection")
-results.append(benchmark(L1LinearSVC()))
-
+# The smaller C, the stronger the regularization.
+# The more regularization, the more sparsity.
+results.append(benchmark(Pipeline([
+  ('feature_selection', LinearSVC(penalty="l1", dual=False, tol=1e-3)),
+  ('classification', LinearSVC())
+])))
 
 # make some plots
 
@@ -308,9 +298,10 @@ test_time = np.array(test_time) / np.max(test_time)
 
 plt.figure(figsize=(12, 8))
 plt.title("Score")
-plt.barh(indices, score, .2, label="score", color='r')
-plt.barh(indices + .3, training_time, .2, label="training time", color='g')
-plt.barh(indices + .6, test_time, .2, label="test time", color='b')
+plt.barh(indices, score, .2, label="score", color='navy')
+plt.barh(indices + .3, training_time, .2, label="training time",
+         color='c')
+plt.barh(indices + .6, test_time, .2, label="test time", color='darkorange')
 plt.yticks(())
 plt.legend(loc='best')
 plt.subplots_adjust(left=.25)

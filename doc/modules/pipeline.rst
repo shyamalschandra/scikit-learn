@@ -42,9 +42,9 @@ is an estimator object::
     >>> clf # doctest: +NORMALIZE_WHITESPACE
     Pipeline(steps=[('reduce_dim', PCA(copy=True, n_components=None,
         whiten=False)), ('svm', SVC(C=1.0, cache_size=200, class_weight=None,
-        coef0=0.0, degree=3, gamma=0.0, kernel='rbf', max_iter=-1,
-        probability=False, random_state=None, shrinking=True, tol=0.001,
-        verbose=False))])
+        coef0=0.0, decision_function_shape=None, degree=3, gamma='auto',
+        kernel='rbf', max_iter=-1, probability=False, random_state=None,
+        shrinking=True, tol=0.001, verbose=False))])
 
 The utility function :func:`make_pipeline` is a shorthand
 for constructing pipelines;
@@ -76,13 +76,13 @@ Parameters of the estimators in the pipeline can be accessed using the
     >>> clf.set_params(svm__C=10) # doctest: +NORMALIZE_WHITESPACE
     Pipeline(steps=[('reduce_dim', PCA(copy=True, n_components=None,
         whiten=False)), ('svm', SVC(C=10, cache_size=200, class_weight=None,
-        coef0=0.0, degree=3, gamma=0.0, kernel='rbf', max_iter=-1,
-        probability=False, random_state=None, shrinking=True, tol=0.001,
-        verbose=False))])
+        coef0=0.0, decision_function_shape=None, degree=3, gamma='auto',
+        kernel='rbf', max_iter=-1, probability=False, random_state=None,
+        shrinking=True, tol=0.001, verbose=False))])
 
 This is particularly important for doing grid searches::
 
-    >>> from sklearn.grid_search import GridSearchCV
+    >>> from sklearn.model_selection import GridSearchCV
     >>> params = dict(reduce_dim__n_components=[2, 5, 10],
     ...               svm__C=[0.1, 10, 100])
     >>> grid_search = GridSearchCV(clf, param_grid=params)
@@ -156,11 +156,11 @@ and ``value`` is an estimator object::
         n_components=None, whiten=False)), ('kernel_pca', KernelPCA(alpha=1.0,
         coef0=1, degree=3, eigen_solver='auto', fit_inverse_transform=False,
         gamma=None, kernel='linear', kernel_params=None, max_iter=None,
-        n_components=None, remove_zero_eig=False, tol=0))],
+        n_components=None, random_state=None, remove_zero_eig=False, tol=0))],
         transformer_weights=None)
 
 Like pipelines, feature unions have a shorthand constructor called
-:func:`make_union` that does require manual naming of the components.
+:func:`make_union` that does not require explicit naming of the components.
 
                                                                        
 .. topic:: Examples:

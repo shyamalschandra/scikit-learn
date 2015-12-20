@@ -12,7 +12,7 @@ scikit-learn, but not scikit or SciKit nor sci-kit learn. Also not scikits.learn
 
 How do you pronounce the project name?
 ------------------------------------------
-sy-kit learn. sci stands for science! 
+sy-kit learn. sci stands for science!
 
 Why scikit?
 ------------
@@ -22,21 +22,82 @@ Apart from scikit-learn, another popular one is `scikit-image <http://scikit-ima
 
 How can I contribute to scikit-learn?
 -----------------------------------------
-See :ref:`contributing`.
+See :ref:`contributing`. Before wanting to add a new algorithm, which is
+usually a major and lengthy undertaking, it is recommended to start with :ref:`known
+issues <easy_issues>`.
+
+
+How can I create a bunch object?
+------------------------------------------------
+
+Don't make a bunch object! They are not part of the scikit-learn API. Bunch
+objects are just a way to package some numpy arrays. As a scikit-learn user you
+only ever need numpy arrays to feed your model with data.
+
+For instance to train a classifier, all you need is a 2D array ``X`` for the
+input variables and a 1D array ``y`` for the target variables. The array ``X``
+holds the features as columns and samples as rows . The array ``y`` contains
+integer values to encode the class membership of each sample in ``X``.
+
+To load data as numpy arrays you can use different libraries depending on the
+original data format:
+
+* `numpy.loadtxt
+  <http://docs.scipy.org/doc/numpy/reference/generated/numpy.loadtxt.html>`_ to
+  load text files (such as CSV) assuming that all the columns have an
+  homogeneous data type (e.g. all numeric values).
+
+* `scipy.io <http://docs.scipy.org/doc/scipy/reference/io.html>`_ for common
+  binary formats often used in scientific computing context.
+
+* `scipy.misc.imread <http://docs.scipy.org/doc/scipy/reference/generated/scipy.
+  misc.imread.html#scipy.misc.imread>`_ (requires the `Pillow
+  <https://pypi.python.org/pypi/Pillow>`_ package) to load pixel intensities
+  data from various image file formats.
+
+* `pandas.io <http://pandas.pydata.org/pandas-docs/stable/io.html>`_ to load
+  heterogeneously typed data from various file formats and database protocols
+  that can slice and dice before conversion to numerical features in a numpy
+  array.
+
+Note: if you manage your own numerical data it is recommended to use an
+optimized file format such as HDF5 to reduce data load times. Various libraries
+such as H5Py, PyTables and pandas provides a Python interface for reading and
+writing data in that format.
 
 Can I add this new algorithm that I (or someone else) just published?
 -------------------------------------------------------------------------
 No. As a rule we only add well-established algorithms. A rule of thumb is at least
-3 years since publications, 1000+ citations and wide use and usefullness. A
+3 years since publications, 200+ citations and wide use and usefullness. A
 technique that provides a clear-cut improvement (e.g. an enhanced  data
 structure or efficient approximation) on a widely-used method will also be
 considered for inclusion.
+Your implementation doesn't need to be in scikit-learn to be used together
+with scikit-learn tools, though. Implement your favorite algorithm
+in a scikit-learn compatible way, upload it to github and we will list
+it under :ref:`related_projects`.
+Also see selectiveness_.
+
 
 Can I add this classical algorithm from the 80s?
 ---------------------------------------------------
 Depends. If there is a common usecase within the scope of scikit-learn, such
 as classification, regression or clustering, where it outperforms methods
 that are already implemented in scikit-learn, we will consider it.
+
+.. _selectiveness:
+
+Why are you so selective on what algorithms you include in scikit-learn?
+------------------------------------------------------------------------
+Code is maintenance cost, and we need to balance the amount of
+code we have with the size of the team (and add to this the fact that
+complexity scales non linearly with the number of features).
+The package relies on core developers using their free time to
+fix bugs, maintain code and review contributions.
+Any algorithm that is added needs future attention by the developers,
+at which point the original author might long have lost interest.
+Also see `this thread on the mailing list
+<http://sourceforge.net/p/scikit-learn/mailman/scikit-learn-general/thread/CAAkaFLWcBG%2BgtsFQzpTLfZoCsHMDv9UG5WaqT0LwUApte0TVzg%40mail.gmail.com/#msg33104380>`_.
 
 Why did you remove HMMs from scikit-learn?
 --------------------------------------------
@@ -45,8 +106,9 @@ See :ref:`adding_graphical_models`.
 .. _adding_graphical_models:
 
 Will you add graphical models or sequence prediction to scikit-learn?
-------------------------------------------------------------------------
-Not in the forseeable future. 
+---------------------------------------------------------------------
+
+Not in the foreseeable future.
 scikit-learn tries to provide a unified API for the basic tasks in machine
 learning, with pipelines and meta-algorithms like grid search to tie
 everything together. The required concepts, APIs, algorithms and
@@ -63,16 +125,20 @@ do structured prediction:
   approximate inference; defines the notion of sample as an instance of
   the graph structure)
 
-* `seqlearn <http://larsmans.github.io/seqlearn/>`_ handles sequences only (focuses on
-  exact inference; has HMMs, but mostly for the sake of completeness;
-  treats a feature vector as a sample and uses an offset encoding for
-  the dependencies between feature vectors)
+* `seqlearn <http://larsmans.github.io/seqlearn/>`_ handles sequences only
+  (focuses on exact inference; has HMMs, but mostly for the sake of
+  completeness; treats a feature vector as a sample and uses an offset encoding
+  for the dependencies between feature vectors)
 
 Will you add GPU support?
---------------------------
-No, or at least not in the near future. The main reason is that GPU support will introduce many software dependencies and introduce platform specific issues.
-scikit-learn is designed to be easy to install on a wide variety of platforms.
-Outside of neural networks, GPUs don't play a large role in machine learning today, and much larger gains in speed can often be achieved by a careful choice of algorithms.
+-------------------------
+
+No, or at least not in the near future. The main reason is that GPU support
+will introduce many software dependencies and introduce platform specific
+issues. scikit-learn is designed to be easy to install on a wide variety of
+platforms. Outside of neural networks, GPUs don't play a large role in machine
+learning today, and much larger gains in speed can often be achieved by a
+careful choice of algorithms.
 
 Do you support PyPy?
 --------------------
@@ -129,3 +195,60 @@ DBSCAN with Levenshtein distances::
 
 Similar tricks can be used, with some care, for tree kernels, graph kernels,
 etc.
+
+
+Why do I sometime get a crash/freeze with n_jobs > 1 under OSX or Linux?
+------------------------------------------------------------------------
+
+Several scikit-learn tools such as ``GridSearchCV`` and ``cross_val_score``
+rely internally on Python's `multiprocessing` module to parallelize execution
+onto several Python processes by passing ``n_jobs > 1`` as argument.
+
+The problem is that Python ``multiprocessing`` does a ``fork`` system call
+without following it with an ``exec`` system call for performance reasons. Many
+libraries like (some versions of) Accelerate / vecLib under OSX, (some versions
+of) MKL, the OpenMP runtime of GCC, nvidia's Cuda (and probably many others),
+manage their own internal thread pool. Upon a call to `fork`, the thread pool
+state in the child process is corrupted: the thread pool believes it has many
+threads while only the main thread state has been forked. It is possible to
+change the libraries to make them detect when a fork happens and reinitialize
+the thread pool in that case: we did that for OpenBLAS (merged upstream in
+master since 0.2.10) and we contributed a `patch
+<https://gcc.gnu.org/bugzilla/show_bug.cgi?id=60035>`_ to GCC's OpenMP runtime
+(not yet reviewed).
+
+But in the end the real culprit is Python's ``multiprocessing`` that does
+``fork`` without ``exec`` to reduce the overhead of starting and using new
+Python processes for parallel computing. Unfortunately this is a violation of
+the POSIX standard and therefore some software editors like Apple refuse to
+consider the lack of fork-safety in Accelerate / vecLib as a bug.
+
+In Python 3.4+ it is now possible to configure ``multiprocessing`` to use the
+'forkserver' or 'spawn' start methods (instead of the default 'fork') to manage
+the process pools. This makes it possible to not be subject to this issue
+anymore. The version of joblib shipped with scikit-learn automatically uses
+that setting by default (under Python 3.4 and later).
+
+If you have custom code that uses ``multiprocessing`` directly instead of using
+it via joblib you can enable the the 'forkserver' mode globally for your
+program: Insert the following instructions in your main script::
+
+    import multiprocessing
+
+    # other imports, custom code, load data, define model...
+
+    if __name__ == '__main__':
+        multiprocessing.set_start_method('forkserver')
+
+        # call scikit-learn utils with n_jobs > 1 here
+
+You can find more default on the new start methods in the `multiprocessing
+documentation <https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods>`_.
+
+
+Why is there no support for deep learning / Will there be support for deep learning in scikit-learn?
+----------------------------------------------------------------------------------------------------
+Deep learning requires a rich vocabulary to define an architecture and the
+use of GPUs for efficient computing. However, neither of these fit within
+the design constraints of scikit-learn. As a result, deep learning is
+currently out of scope for what scikit-learn seeks to achieve.
